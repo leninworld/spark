@@ -8,10 +8,23 @@ title: Spark on Kubernetes Integration Tests
 Note that the integration test framework is currently being heavily revised and
 is subject to change.
 
-The simplest way to run the integration tests is to install and run Minikube, then run the following from this
-directory:
+This document is the contributor entry point for Spark's Kubernetes integration
+tests. It covers the wrapper scripts in this directory, the supported test
+backends, and the most common customization points when you are iterating on a
+change locally.
+
+## Quick start
+
+The simplest way to run the integration tests is to install and start
+Minikube, then run the wrapper script from this directory:
 
     ./dev/dev-run-integration-tests.sh
+
+The wrapper script will:
+
+1. build the Spark Kubernetes integration test module and its dependencies
+2. build Spark container images unless you pass `--image-tag`
+3. run the Scala integration suites in this module
 
 To run tests with a specific Java version instead of Java 21, use `--java-image-tag` to specify the 
 [base image](https://hub.docker.com/r/azul/zulu-openjdk/tags) accordingly.
@@ -24,10 +37,22 @@ and the custom Dockerfile need to include a Java installation by itself.
 
     ./dev/dev-run-integration-tests.sh --docker-file ../docker/src/main/dockerfiles/spark/Dockerfile
 
-The minimum tested version of Minikube is 1.28.0. The kube-dns addon must be enabled. Minikube should
-run with a minimum of 4 CPUs and 6G of memory:
+The minimum tested version of Minikube is 1.28.0. The kube-dns addon must be
+enabled. Minikube should run with a minimum of 4 CPUs and 6G of memory:
 
     minikube start --cpus 4 --memory 6144
+
+If your Minikube profile uses a VM driver and you want to run the
+persistent-volume suites, mount a writable host directory into the VM and point
+the tests at it:
+
+    minikube mount /tmp:/tmp
+    export PVC_TESTS_HOST_PATH=/tmp
+    export PVC_TESTS_VM_PATH=/tmp
+
+`PVC_TESTS_HOST_PATH` and `PVC_TESTS_VM_PATH` are read by
+`PVTestsSuite.scala` when creating the backing files and `hostPath` mounts for
+the persistent-volume test cases.
 
 You can download Minikube [here](https://github.com/kubernetes/minikube/releases).
 
@@ -35,6 +60,18 @@ You can download Minikube [here](https://github.com/kubernetes/minikube/releases
 
 Configuration of the integration test runtime is done through passing different arguments to the test script. 
 The main useful options are outlined below.
+
+## Running a subset of suites
+
+The wrapper script always includes the `k8s` tag. You can narrow the run with
+additional ScalaTest tags:
+
+    ./dev/dev-run-integration-tests.sh --include-tags minikube
+    ./dev/dev-run-integration-tests.sh --exclude-tags r
+
+The Maven module also excludes `org.apache.spark.deploy.k8s.integrationtest.YuniKornTag`
+by default. Override that behavior with `--default-exclude-tags` if you need to
+exercise those suites explicitly.
 
 ## Using a different backend
 
@@ -129,6 +166,16 @@ to get, list, watch, and create pods. For clusters with RBAC turned on, it's imp
 granted to the service account in the namespace through an appropriate role and role binding. A reference RBAC 
 configuration is provided in `dev/spark-rbac.yaml`.
 
+## Reusing previously built artifacts
+
+When you are iterating on the tests themselves instead of changing Spark code,
+you can often avoid rebuilding Maven dependencies:
+
+    ./dev/dev-run-integration-tests.sh --skip-building-dependencies
+
+If you already built container images in a previous run, pair this with
+`--image-tag $(cat target/imageTag.txt)` to skip image rebuilds as well.
+
 # Running the Test Directly
 
 If you prefer to run just the integration tests directly, then you can customise the behaviour via passing system 
@@ -143,6 +190,12 @@ properties to Maven.  For example:
                             -Dspark.kubernetes.test.namespace=spark-int-tests \
                             -Dspark.kubernetes.test.deployMode=docker-desktop \
                             -Dtest.include.tags=k8s
+
+From the repo root you can also use SBT to run the same module. This is useful
+when you want to stay aligned with Spark's preferred local build flow:
+
+    build/sbt -Pkubernetes -Pkubernetes-integration-tests \
+        'kubernetes-integration-tests/testOnly -- -z "Run SparkPi with a very long application name"'
                             
                             
 ## Available Maven Properties
@@ -362,4 +415,3 @@ You can also specify `volcano` tag to only run Volcano test:
 ## Cleanup Volcano
 
     kubectl delete -f https://raw.githubusercontent.com/volcano-sh/volcano/v1.14.1/installer/volcano-development.yaml
-

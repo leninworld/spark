@@ -115,6 +115,14 @@ $ ./bin/docker-image-tool.sh -r <repo> -t my-tag -R ./kubernetes/dockerfiles/spa
 
 You can also use the [Apache Spark Docker images](https://hub.docker.com/r/apache/spark) (such as `apache/spark:<version>`) directly.
 
+## Kubernetes Integration Tests
+
+Spark's Kubernetes integration test harness lives under
+`resource-managers/kubernetes/integration-tests`. For contributor-oriented setup
+instructions, supported backends, image reuse, and test filtering examples, see
+`resource-managers/kubernetes/integration-tests/README.md` in the Spark source
+tree.
+
 ## Cluster Mode
 
 To launch Spark Pi in cluster mode,
